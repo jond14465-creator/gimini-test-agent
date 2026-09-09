@@ -1,0 +1,1 @@
+- [[agent-skill-discovery]] — selected an Agent Skill Stack resource from Agent Finder
