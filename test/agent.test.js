@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 
 const { runOsintAgent } = require("../src/agent");
 const { parseArgs, formatTextReport } = require("../src/index");
+const { detectTargetType, normalizeTarget } = require("../src/guardrails");
 
 function buildFetchStub(routes) {
   return async function fetchStub(url) {
@@ -35,6 +36,15 @@ test("parseArgs rejette les types inconnus", () => {
 
 test("parseArgs rejette une limite invalide", () => {
   assert.throws(() => parseArgs(["--limit", "0", "alice"]), /entier entre 1 et 10/);
+});
+
+test("detectTargetType traite les URL comme des domaines", () => {
+  assert.equal(normalizeTarget("https://example.com/foo?bar=baz"), "example.com");
+  assert.equal(detectTargetType("https://example.com/foo?bar=baz"), "domain");
+});
+
+test("detectTargetType peut garder un pseudo ambigu comme username", () => {
+  assert.equal(detectTargetType("octocat.dev"), "username");
 });
 
 test("runOsintAgent agrège les sources pour un domaine", async () => {
@@ -105,6 +115,25 @@ test("runOsintAgent tolère une entrée Wikipedia sans snippet", async () => {
 
   const wikipedia = report.sources.find((source) => source.source === "Wikipedia");
   assert.equal(wikipedia.findings[0].snippet, "Aucun extrait disponible.");
+});
+
+test("runOsintAgent tolère des payloads fournisseurs malformés", async () => {
+  const report = await runOsintAgent("https://example.com/path", {
+    fetchImpl: buildFetchStub([
+      { prefix: "https://dns.google/resolve?name=example.com&type=A", payload: { Answer: {} } },
+      { prefix: "https://crt.sh/?q=example.com&output=json", payload: [{ id: 7, name_value: "example.com", entry_timestamp: "2026-02-02" }] },
+      { prefix: "https://api.github.com/search/repositories", payload: { items: {} } },
+      { prefix: "https://fr.wikipedia.org/", payload: { query: { search: {} } } },
+      { prefix: "https://hn.algolia.com/api/v1/search", payload: { hits: {} } },
+    ]),
+  });
+
+  const crtsh = report.sources.find((source) => source.source === "crt.sh");
+  const dns = report.sources.find((source) => source.source === "Google DNS");
+
+  assert.equal(report.type, "domain");
+  assert.deepEqual(dns.findings, []);
+  assert.equal(crtsh.findings[0].title, "example.com");
 });
 
 test("formatTextReport produit un rendu lisible", () => {

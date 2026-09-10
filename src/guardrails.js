@@ -4,13 +4,68 @@ const BLOCKED_PATTERNS = [
   /\b(?:password|mot\s*de\s*passe|secret|token|api[-_\s]?key)\b/i,
   /\b(?:ssn|social\s*security|iban|credit\s*card|carte\s*bancaire)\b/i,
 ];
+const COMMON_DOMAIN_SUFFIXES = new Set([
+  "ai",
+  "ca",
+  "co",
+  "com",
+  "de",
+  "edu",
+  "es",
+  "fr",
+  "gov",
+  "io",
+  "it",
+  "mil",
+  "net",
+  "org",
+  "uk",
+  "us",
+]);
+
+function normalizeTarget(target) {
+  const normalized = String(target || "").trim();
+
+  try {
+    const url = normalized.match(/^[a-z][a-z0-9+.-]*:\/\//i)
+      ? new URL(normalized)
+      : new URL(`https://${normalized}`);
+    return url.hostname || normalized;
+  } catch {
+    return normalized
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+      .replace(/^@/, "")
+      .split(/[/?#]/, 1)[0]
+      .replace(/\/+$/, "");
+  }
+}
 
 function detectTargetType(target) {
-  if (/^(?:https?:\/\/)?(?:[\w-]+\.)+[\w-]{2,}$/i.test(target)) {
+  const normalized = normalizeTarget(target);
+  const hasUrlMarkers =
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(target) || /[/?#]/.test(String(target || ""));
+
+  if (/^@[\w.-]{2,39}$/i.test(target)) {
+    return "username";
+  }
+
+  if (
+    !hasUrlMarkers &&
+    /^[\w.-]{2,39}$/i.test(normalized) &&
+    normalized.includes(".") &&
+    normalized.split(".").length === 2
+  ) {
+    const [, suffix = ""] = normalized.split(".");
+    if (!COMMON_DOMAIN_SUFFIXES.has(suffix.toLowerCase())) {
+      return "username";
+    }
+  }
+
+  if (/^(?:[\w-]+\.)+[\w-]{2,}$/i.test(normalized)) {
     return "domain";
   }
 
-  if (/^[\w.-]{2,39}$/i.test(target) && !/\s/.test(target)) {
+  if (/^[\w.-]{2,39}$/i.test(normalized) && !/\s/.test(normalized)) {
     return "username";
   }
 
@@ -38,4 +93,5 @@ function assertAllowedTarget(target) {
 module.exports = {
   assertAllowedTarget,
   detectTargetType,
+  normalizeTarget,
 };

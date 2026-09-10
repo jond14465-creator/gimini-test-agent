@@ -1,12 +1,12 @@
 "use strict";
 
-const { assertAllowedTarget, detectTargetType } = require("./guardrails");
+const { assertAllowedTarget, detectTargetType, normalizeTarget } = require("./guardrails");
 const { buildProviders } = require("./providers");
 
 async function fetchJson(url, fetchImpl) {
   const response = await fetchImpl(url, {
     headers: {
-      "user-agent": "gimini-test-agent-osint/1.0",
+      "user-agent": "gimini-test-agent/1.0",
       accept: "application/json",
     },
   });
@@ -36,12 +36,13 @@ async function runOsintAgent(target, options = {}) {
   const normalizedTarget = assertAllowedTarget(target);
   const type = options.type || detectTargetType(normalizedTarget);
   const fetchImpl = options.fetchImpl || global.fetch;
+  const providerTarget = type === "domain" ? normalizeTarget(normalizedTarget) : normalizedTarget;
 
   if (typeof fetchImpl !== "function") {
     throw new Error("Aucune implémentation fetch n'est disponible.");
   }
 
-  const providers = buildProviders(normalizedTarget, type);
+  const providers = buildProviders(providerTarget, type);
 
   const resultsBySource = await Promise.all(
     providers.map(async (provider) => {
