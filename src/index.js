@@ -2,6 +2,8 @@
 "use strict";
 
 const { runOsintAgent } = require("./agent");
+const { formatTextReport } = require("./report");
+const { startServer } = require("./server");
 
 function parseArgs(argv) {
   const values = [...argv];
@@ -41,48 +43,46 @@ function parseArgs(argv) {
   };
 }
 
-function formatTextReport(report) {
-  const lines = [
-    `Cible: ${report.target}`,
-    `Type: ${report.type}`,
-    `Sources utiles: ${report.summary.activeSources}/${report.sources.length}`,
-    `Résultats: ${report.summary.totalFindings}`,
-    "",
-  ];
+function parseServeArgs(argv) {
+  const values = [...argv];
+  const options = { port: 3000, host: "127.0.0.1" };
 
-  for (const source of report.sources) {
-    lines.push(`## ${source.source}`);
-    if (source.error) {
-      lines.push(`- ${source.error}`);
-      lines.push("");
+  while (values[0]?.startsWith("--")) {
+    const option = values.shift();
+
+    if (option === "--port") {
+      options.port = Number(values.shift() || "3000");
+      if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
+        throw new Error("Le port doit être un entier entre 1 et 65535.");
+      }
       continue;
     }
 
-    if (source.findings.length === 0) {
-      lines.push("- Aucun résultat");
-      lines.push("");
+    if (option === "--host") {
+      options.host = values.shift() || "127.0.0.1";
       continue;
     }
 
-    for (const finding of source.findings) {
-      lines.push(`- ${finding.title}`);
-      lines.push(`  ${finding.snippet}`);
-      lines.push(`  ${finding.url}`);
-    }
-    lines.push("");
+    throw new Error(`Option inconnue: ${option}`);
   }
 
-  lines.push(report.disclaimer);
-  return lines.join("\n");
+  return options;
 }
 
 async function main() {
   try {
-    const { target, options } = parseArgs(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+
+    if (argv[0] === "serve") {
+      startServer(parseServeArgs(argv.slice(1)));
+      return;
+    }
+
+    const { target, options } = parseArgs(argv);
 
     if (!target) {
       throw new Error(
-        "Usage: osint-agent [--json] [--type domain|username|keyword] [--limit 5] <cible>"
+        "Usage: osint-agent [--json] [--type domain|username|keyword] [--limit 5] <cible>\n       osint-agent serve [--host 127.0.0.1] [--port 3000]"
       );
     }
 
@@ -104,5 +104,6 @@ if (require.main === module) {
 
 module.exports = {
   parseArgs,
+  parseServeArgs,
   formatTextReport,
 };

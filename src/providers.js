@@ -8,6 +8,10 @@ function getArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function getObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function buildProviders(target, type) {
   const encoded = encodeURIComponent(target);
   const domain = type === "domain" ? target.replace(/^https?:\/\//i, "") : null;
@@ -23,6 +27,19 @@ function buildProviders(target, type) {
         getArray(payload.items).slice(0, 5).map((item) => ({
           title: item.full_name,
           snippet: item.description || "Aucune description fournie.",
+          url: item.html_url,
+        })),
+    },
+    {
+      id: "github-users",
+      label: "GitHub Users",
+      type: "search",
+      url: `https://api.github.com/search/users?q=${encoded}&per_page=5`,
+      enabled: type !== "domain",
+      parse: (payload) =>
+        getArray(payload.items).slice(0, 5).map((item) => ({
+          title: item.login,
+          snippet: `Compte GitHub ${item.type || "User"}`,
           url: item.html_url,
         })),
     },
@@ -52,6 +69,22 @@ function buildProviders(target, type) {
           url: item.url || `https://news.ycombinator.com/item?id=${item.objectID}`,
         })),
     },
+    {
+      id: "npm",
+      label: "npm",
+      type: "search",
+      url: `https://registry.npmjs.org/-/v1/search?text=${encoded}&size=5`,
+      enabled: type !== "domain",
+      parse: (payload) =>
+        getArray(payload.objects).slice(0, 5).map((item) => {
+          const pkg = getObject(item.package);
+          return {
+            title: pkg.name || "Package npm",
+            snippet: pkg.description || "Aucune description fournie.",
+            url: pkg.links?.npm || `https://www.npmjs.com/package/${encodeURIComponent(pkg.name || "")}`,
+          };
+        }),
+    },
   ];
 
   if (domain) {
@@ -70,6 +103,29 @@ function buildProviders(target, type) {
           })),
       },
       {
+        id: "rdap",
+        label: "RDAP",
+        type: "infrastructure",
+        url: `https://rdap.org/domain/${encodeURIComponent(domain)}`,
+        enabled: true,
+        parse: (payload) => {
+          const entityHandles = getArray(payload.entities)
+            .slice(0, 3)
+            .map((entry) => entry.handle)
+            .filter(Boolean);
+          return [
+            {
+              title: payload.ldhName || domain,
+              snippet:
+                entityHandles.length > 0
+                  ? `Entités RDAP: ${entityHandles.join(", ")}`
+                  : "Aucune entité RDAP disponible.",
+              url: `https://rdap.org/domain/${encodeURIComponent(domain)}`,
+            },
+          ];
+        },
+      },
+      {
         id: "crtsh",
         label: "crt.sh",
         type: "infrastructure",
@@ -81,6 +137,21 @@ function buildProviders(target, type) {
             snippet: `Certificat observé le ${entry.entry_timestamp}`,
             url: `https://crt.sh/?id=${entry.id}`,
           })),
+      },
+      {
+        id: "wayback",
+        label: "Wayback Machine",
+        type: "archive",
+        url: `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}/*&output=json&limit=6&fl=timestamp,original,statuscode`,
+        enabled: true,
+        parse: (payload) =>
+          getArray(payload)
+            .slice(1, 6)
+            .map((entry) => ({
+              title: entry[1] || domain,
+              snippet: `Archive ${entry[0] || "inconnue"} • statut ${entry[2] || "n/a"}`,
+              url: entry[1] || `https://web.archive.org/web/*/${domain}`,
+            })),
       }
     );
   }
