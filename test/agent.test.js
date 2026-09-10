@@ -29,6 +29,14 @@ test("parseArgs lit les options principales", () => {
   assert.equal(result.options.limit, 3);
 });
 
+test("parseArgs rejette les types inconnus", () => {
+  assert.throws(() => parseArgs(["--type", "email", "alice"]), /domain, username ou keyword/);
+});
+
+test("parseArgs rejette une limite invalide", () => {
+  assert.throws(() => parseArgs(["--limit", "0", "alice"]), /entier entre 1 et 10/);
+});
+
 test("runOsintAgent agrège les sources pour un domaine", async () => {
   const report = await runOsintAgent("example.com", {
     fetchImpl: buildFetchStub([

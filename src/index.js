@@ -6,6 +6,7 @@ const { runOsintAgent } = require("./agent");
 function parseArgs(argv) {
   const values = [...argv];
   const options = { json: false, type: null, limit: 5 };
+  const allowedTypes = new Set(["domain", "username", "keyword"]);
 
   while (values[0]?.startsWith("--")) {
     const option = values.shift();
@@ -17,11 +18,17 @@ function parseArgs(argv) {
 
     if (option === "--type") {
       options.type = values.shift() || null;
+      if (!allowedTypes.has(options.type)) {
+        throw new Error("Le type doit être domain, username ou keyword.");
+      }
       continue;
     }
 
     if (option === "--limit") {
       options.limit = Number(values.shift() || "5");
+      if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 10) {
+        throw new Error("La limite doit être un entier entre 1 et 10.");
+      }
       continue;
     }
 
