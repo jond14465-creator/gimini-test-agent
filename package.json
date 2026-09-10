@@ -1,0 +1,24 @@
+{
+  "name": "gimini-test-agent",
+  "version": "1.0.0",
+  "description": "Agent OSINT CLI minimaliste pour collecter des informations publiques sur des domaines, organisations et pseudos.",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/jond14465-creator/gimini-test-agent"
+  },
+  "keywords": [
+    "osint",
+    "cli",
+    "security",
+    "research"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bin": {
+    "osint-agent": "./src/index.js"
+  }
+}
