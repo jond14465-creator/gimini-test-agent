@@ -77,6 +77,36 @@ test("runOsintAgent bloque les requêtes sensibles évidentes", async () => {
   );
 });
 
+test("runOsintAgent tolère un payload crt.sh inattendu", async () => {
+  const report = await runOsintAgent("example.com", {
+    fetchImpl: buildFetchStub([
+      { prefix: "https://dns.google/resolve", payload: { Answer: [] } },
+      { prefix: "https://crt.sh/", payload: { message: "unexpected" } },
+      { prefix: "https://api.github.com/search/repositories", payload: { items: [] } },
+      { prefix: "https://fr.wikipedia.org/", payload: { query: { search: [] } } },
+      { prefix: "https://hn.algolia.com/api/v1/search", payload: { hits: [] } },
+    ]),
+  });
+
+  const crtsh = report.sources.find((source) => source.source === "crt.sh");
+  assert.deepEqual(crtsh.findings, []);
+  assert.equal(crtsh.error, null);
+});
+
+test("runOsintAgent tolère une entrée Wikipedia sans snippet", async () => {
+  const report = await runOsintAgent("example", {
+    type: "keyword",
+    fetchImpl: buildFetchStub([
+      { prefix: "https://api.github.com/search/repositories", payload: { items: [] } },
+      { prefix: "https://fr.wikipedia.org/", payload: { query: { search: [{ title: "Example" }] } } },
+      { prefix: "https://hn.algolia.com/api/v1/search", payload: { hits: [] } },
+    ]),
+  });
+
+  const wikipedia = report.sources.find((source) => source.source === "Wikipedia");
+  assert.equal(wikipedia.findings[0].snippet, "Aucun extrait disponible.");
+});
+
 test("formatTextReport produit un rendu lisible", () => {
   const output = formatTextReport({
     target: "example",

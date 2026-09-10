@@ -1,5 +1,9 @@
 "use strict";
 
+function getTextSnippet(value, fallback = "Aucun extrait disponible.") {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
 function buildProviders(target, type) {
   const encoded = encodeURIComponent(target);
   const domain = type === "domain" ? target.replace(/^https?:\/\//i, "") : null;
@@ -27,7 +31,7 @@ function buildProviders(target, type) {
       parse: (payload) =>
         (payload.query?.search || []).slice(0, 5).map((item) => ({
           title: item.title,
-          snippet: item.snippet.replace(/<[^>]+>/g, ""),
+          snippet: getTextSnippet(item.snippet),
           url: `https://fr.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/\s+/g, "_"))}`,
         })),
     },
@@ -68,7 +72,7 @@ function buildProviders(target, type) {
         url: `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`,
         enabled: true,
         parse: (payload) =>
-          payload.slice(0, 5).map((entry) => ({
+          (Array.isArray(payload) ? payload : []).slice(0, 5).map((entry) => ({
             title: entry.common_name || entry.name_value,
             snippet: `Certificat observé le ${entry.entry_timestamp}`,
             url: `https://crt.sh/?id=${entry.id}`,
