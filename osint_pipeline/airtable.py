@@ -65,7 +65,20 @@ class Airtable:
     async def schema(self, create=False):
         url = f"https://api.airtable.com/v0/meta/bases/{self.settings.airtable_base}/tables"
         response = await request_json(self.client, "GET", url, headers=self.headers, timeout=self.settings.timeout)
-        tables = {table["name"]: table for table in response.get("tables", [])}
+        if not isinstance(response.get("tables"), list):
+            raise ServiceError("Schéma Airtable illisible")
+        try:
+            tables = {table["name"]: table for table in response["tables"]}
+            for name, fields in SCHEMA.items():
+                if name not in tables:
+                    continue
+                actual = {field["name"]: field["type"] for field in tables[name]["fields"]}
+                if not tables[name].get("id") or any(actual.get(key) != kind for key, kind in fields.items()):
+                    raise ServiceError(f"Schéma Airtable incompatible : {name}")
+        except (KeyError, TypeError):
+            raise ServiceError("Schéma Airtable illisible") from None
+        # Check every existing table before the first mutation, including tables
+        # that appear after a missing table in the creation order.
         for name, fields in SCHEMA.items():
             if name not in tables:
                 if not create:
@@ -75,7 +88,7 @@ class Airtable:
                     timeout=self.settings.timeout)
                 await asyncio.sleep(0.25)
             actual = {field["name"]: field["type"] for field in tables[name].get("fields", [])}
-            if any(actual.get(key) != kind for key, kind in fields.items()):
+            if not tables[name].get("id") or any(actual.get(key) != kind for key, kind in fields.items()):
                 raise ServiceError(f"Schéma Airtable incompatible : {name}")
         return {name: tables[name]["id"] for name in SCHEMA}
 

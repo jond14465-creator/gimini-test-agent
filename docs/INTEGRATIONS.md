@@ -89,6 +89,11 @@ n'altère pas un schéma existant incompatible. Les scopes nécessaires sont
 permettant ces opérations. En fonctionnement normal, `schema.bases:write`
 n'est pas nécessaire.
 
+Toutes les tables existantes sont vérifiées avant la première création. Une
+réponse de schéma illisible ou une table incompatible interrompt l'initialisation
+sans mutation. Les créations elles-mêmes ne sont pas transactionnelles : après
+une interruption distante, la commande peut être relancée.
+
 | Table | Contenu et clé d'upsert |
 | --- | --- |
 | Runs | Cible, dates, statut, compteurs ; UUID d'exécution |
@@ -116,6 +121,8 @@ partiellement envoyés sans nouvelles dépenses OpenAI ou Firecrawl. Elle ne
 réexécute ni recherche ni analyse. Les tables ne sont pas mises à jour dans une
 transaction globale ; un échec peut laisser une partie des lignes synchronisées.
 Le reçu local n'est marqué `synced` qu'après réussite de tous les lots.
+Éviter plusieurs synchronisations simultanées vers la même base : Airtable ne
+fournit pas ici de contrainte d'unicité transactionnelle sur les clés externes.
 
 ## Budgets et fiabilité
 
@@ -164,6 +171,10 @@ Un essai réel du graphe en mode sans IA/Firecrawl a généré 18 observations e
 cinq fichiers attendus ; les sources publiques indisponibles ont laissé le
 rapport en état `partial`. Un lancement avec intégrations activées et variables
 absentes a bien échoué avant tout appel payant.
+
+Les tests sont aussi définis dans `.github/workflows/tests.yml` pour les PR et
+les mises à jour de `main`. Ils n'utilisent aucun secret de service et ne
+déclenchent ni collecte payante, ni analyse distante, ni écriture Airtable réelle.
 
 ## Références officielles consultées
 

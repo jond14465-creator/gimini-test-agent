@@ -262,3 +262,28 @@ async def test_firecrawl_search_malformed_payload_is_explicit(settings):
             json={"success": True, "data": {"unexpected": []}}))) as client:
         with pytest.raises(ServiceError, match="search invalides"):
             await Firecrawl(client, settings).search("example.com")
+
+
+async def test_later_incompatible_table_prevents_all_creations(settings):
+    methods = []
+    def handler(request):
+        methods.append(request.method)
+        return httpx.Response(200, json={"tables": [{"name": "EvidenceLinks", "id": "tblEvidence",
+            "fields": [{"name": "Key", "type": "formula"}]}]})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ServiceError, match="incompatible"):
+            await Airtable(client, settings).schema(create=True)
+    assert methods == ["GET"]
+
+
+@pytest.mark.parametrize("payload", [{}, {"tables": None}, {"tables": [None]},
+    {"tables": [{"name": "Runs", "id": "tblRuns"}]}])
+async def test_unreadable_airtable_schema_prevents_mutations(settings, payload):
+    methods = []
+    def handler(request):
+        methods.append(request.method)
+        return httpx.Response(200, json=payload)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ServiceError, match="illisible"):
+            await Airtable(client, settings).schema(create=True)
+    assert methods == ["GET"]
