@@ -72,6 +72,17 @@ function formatMarkdownReport(report) {
   for (const source of report.sources) {
     lines.push(`- ${markdownText(source.source)} : ${markdownText(source.status || (source.error ? "failed" : "collected"))}`);
   }
+  if (report.analysis) {
+    lines.push("", "## Analyse IA", "", "Résumé du modèle non vérifié :", "", markdownText(report.analysis.summary), "");
+    for (const claim of report.analysis.claims || []) {
+      lines.push(`- ${markdownText(claim.text)} (citation correspondante ; fait non vérifié)`);
+      for (const citation of claim.citations) {
+        lines.push(`  - ${markdownText(citation.quote)} — observation ${citation.observation_id}`);
+      }
+    }
+    lines.push("", "### Limites de l'analyse", "");
+    for (const limitation of report.analysis.limitations || []) lines.push(`- ${markdownText(limitation)}`);
+  }
   lines.push("", markdownText(report.disclaimer));
   return lines.join("\n");
 }

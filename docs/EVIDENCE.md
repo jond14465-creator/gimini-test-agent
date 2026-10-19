@@ -52,10 +52,10 @@ répétitions valides retirées.
 
 ## Suite du plan
 
-Cette étape constitue une mémoire locale par exécution, pas encore une base de
-connaissances interrogeable ni une intégration Airtable. Restent : orchestration
-LangGraph/Agents SDK, collecte Firecrawl, vérification croisée explicite,
-persistance Airtable et tests réels bornés avec les accès runtime configurés.
+La CLI Node constitue une mémoire locale par exécution. Le pipeline Python
+ajoute maintenant LangGraph, Agents SDK, Firecrawl et Airtable ; voir
+`INTEGRATIONS.md`. La validation factuelle indépendante et les essais réels
+des services authentifiés restent à effectuer.
 
 ## Validation du 19 octobre 2026
 

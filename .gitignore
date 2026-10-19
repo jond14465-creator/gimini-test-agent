@@ -6,3 +6,5 @@ coverage/
 .venv/
 __pycache__/
 reports/
+.pytest_cache/
+*.egg-info/
