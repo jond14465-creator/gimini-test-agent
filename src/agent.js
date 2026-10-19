@@ -3,6 +3,8 @@
 const { assertAllowedTarget, detectTargetType, normalizeTarget } = require("./guardrails");
 const { buildProviders } = require("./providers");
 const { validateOptions } = require("./options");
+const { randomUUID } = require("node:crypto");
+const { buildEvidence } = require("./evidence");
 
 async function fetchJson(url, fetchImpl, timeoutMs) {
   const controller = new AbortController();
@@ -14,21 +16,18 @@ async function fetchJson(url, fetchImpl, timeoutMs) {
     }, timeoutMs);
   });
   try {
-    return await Promise.race([timeout, (async () => {
-        const response = await fetchImpl(url, {
-          signal: controller.signal,
-          headers: {
-            "user-agent": "gimini-test-agent/1.0",
-            accept: "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        return await response.json();
-    })()]);
+    const request = async () => {
+      const response = await fetchImpl(url, {
+        signal: controller.signal,
+        headers: {
+          "user-agent": "gimini-test-agent/1.0",
+          accept: "application/json",
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    };
+    return await Promise.race([timeout, request()]);
   } finally {
     clearTimeout(timer);
   }
@@ -60,32 +59,51 @@ async function runOsintAgent(target, options = {}) {
   }
 
   const providers = buildProviders(providerTarget, type);
+  const runId = randomUUID();
+  const startedAt = new Date().toISOString();
 
   const resultsBySource = await Promise.all(
     providers.map(async (provider) => {
+      const metadata = { id: provider.id, requestUrl: provider.url };
       if (!provider.enabled) {
-        return { source: provider.label, findings: [], error: "Source désactivée." };
+        return { ...metadata, source: provider.label, status: "disabled", collectedAt: null, findings: [], error: "Source désactivée." };
       }
 
       try {
         const payload = await fetchJson(provider.url, fetchImpl, options.timeoutMs ?? 10000);
         const findings = provider.parse(payload).slice(0, options.limit || 5);
-        return { source: provider.label, findings, error: null };
+        return { ...metadata, source: provider.label, status: "collected", collectedAt: new Date().toISOString(), findings, error: null };
       } catch (error) {
         return {
+          ...metadata,
           source: provider.label,
+          status: "failed",
+          collectedAt: new Date().toISOString(),
           findings: [],
           error: `Collecte impossible: ${error.message}`,
         };
       }
     })
   );
+  const completedAt = new Date().toISOString();
+  const evidence = buildEvidence(resultsBySource, normalizedTarget, completedAt);
 
   return {
+    schemaVersion: "1.1",
+    run: { id: runId, startedAt, completedAt, status: resultsBySource.some(source => source.status === "failed") ? "partial" : "completed" },
     target: normalizedTarget,
     type,
-    summary: summarize(resultsBySource),
+    summary: { ...summarize(resultsBySource), ...evidence.stats },
     sources: resultsBySource,
+    observations: evidence.observations,
+    graph: evidence.graph,
+    timeline: evidence.timeline,
+    journal: [
+      { runId, at: startedAt, action: "run_started" },
+      ...resultsBySource.map(source => ({ runId, at: source.collectedAt || startedAt,
+        action: "source_finished", sourceId: source.id, status: source.status, findingCount: source.findings.length })),
+      { runId, at: completedAt, action: "run_finished", ...evidence.stats },
+    ].sort((a, b) => a.at.localeCompare(b.at)),
     disclaimer:
       "Utilisation autorisée uniquement sur des informations publiques et dans un cadre légal.",
   };

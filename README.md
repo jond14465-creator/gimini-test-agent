@@ -9,6 +9,8 @@ Agent OSINT CLI minimaliste pour collecter des informations publiques sur un dom
 - nouvelles sources publiques : RDAP, Wayback Machine, GitHub Users, npm
 - garde-fous basiques contre les requêtes manifestement sensibles
 - sortie texte ou JSON
+- preuves dédupliquées avec provenance, empreintes et journal d'exécution
+- sauvegarde locale JSON/Markdown, graphe et chronologie (`--output reports`)
 - exposition en API HTTP
 - tests unitaires sans dépendance externe
 
@@ -30,6 +32,7 @@ Agent OSINT CLI minimaliste pour collecter des informations publiques sur un dom
 npm test
 npm start -- example.com
 node src/index.js --json --type username octocat
+npm start -- --json --output reports --type domain example.com
 npm run api -- --port 3000
 ```
 
@@ -61,8 +64,8 @@ Résultats: 7
 - délai maximal de 10 secondes par source, y compris la lecture du JSON ;
   une source en échec reste signalée dans le rapport
 - types, limites et formats invalides rejetés avant la collecte
-- prototype déterministe : intégrations IA, Firecrawl, Airtable, vérification
-  croisée et déduplication à implémenter (voir `docs/AUDIT.md`)
+- prototype déterministe : intégrations IA, Firecrawl, Airtable et vérification
+  croisée à implémenter (voir `docs/AUDIT.md` et `docs/EVIDENCE.md`)
 - uniquement des sources publiques
 - dépend de la disponibilité réseau des API distantes
 - ne contourne ni authentification ni restriction d’accès

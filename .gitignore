@@ -5,3 +5,4 @@ coverage/
 !.env.example
 .venv/
 __pycache__/
+reports/
