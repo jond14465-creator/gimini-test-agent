@@ -58,6 +58,11 @@ Résultats: 7
 
 ## Limites
 
+- délai maximal de 10 secondes par source, y compris la lecture du JSON ;
+  une source en échec reste signalée dans le rapport
+- types, limites et formats invalides rejetés avant la collecte
+- prototype déterministe : intégrations IA, Firecrawl, Airtable, vérification
+  croisée et déduplication à implémenter (voir `docs/AUDIT.md`)
 - uniquement des sources publiques
 - dépend de la disponibilité réseau des API distantes
 - ne contourne ni authentification ni restriction d’accès

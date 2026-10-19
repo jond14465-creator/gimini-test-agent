@@ -2,20 +2,36 @@
 
 const { assertAllowedTarget, detectTargetType, normalizeTarget } = require("./guardrails");
 const { buildProviders } = require("./providers");
+const { validateOptions } = require("./options");
 
-async function fetchJson(url, fetchImpl) {
-  const response = await fetchImpl(url, {
-    headers: {
-      "user-agent": "gimini-test-agent/1.0",
-      accept: "application/json",
-    },
+async function fetchJson(url, fetchImpl, timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("Délai de collecte dépassé."));
+      controller.abort();
+    }, timeoutMs);
   });
+  try {
+    return await Promise.race([timeout, (async () => {
+        const response = await fetchImpl(url, {
+          signal: controller.signal,
+          headers: {
+            "user-agent": "gimini-test-agent/1.0",
+            accept: "application/json",
+          },
+        });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return await response.json();
+    })()]);
+  } finally {
+    clearTimeout(timer);
   }
-
-  return response.json();
 }
 
 function summarize(resultsBySource) {
@@ -33,6 +49,7 @@ function summarize(resultsBySource) {
 }
 
 async function runOsintAgent(target, options = {}) {
+  validateOptions(options);
   const normalizedTarget = assertAllowedTarget(target);
   const type = options.type || detectTargetType(normalizedTarget);
   const fetchImpl = options.fetchImpl || global.fetch;
@@ -51,7 +68,7 @@ async function runOsintAgent(target, options = {}) {
       }
 
       try {
-        const payload = await fetchJson(provider.url, fetchImpl);
+        const payload = await fetchJson(provider.url, fetchImpl, options.timeoutMs ?? 10000);
         const findings = provider.parse(payload).slice(0, options.limit || 5);
         return { source: provider.label, findings, error: null };
       } catch (error) {

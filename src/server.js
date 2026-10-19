@@ -4,6 +4,7 @@ const http = require("node:http");
 
 const { runOsintAgent } = require("./agent");
 const { formatTextReport } = require("./report");
+const { validateOptions } = require("./options");
 
 function getLimit(value) {
   if (value == null || value === "") {
@@ -62,6 +63,7 @@ function createServer(options = {}) {
       const type = url.searchParams.get("type") || undefined;
       const limit = getLimit(url.searchParams.get("limit"));
       const format = url.searchParams.get("format") || "json";
+      validateOptions({ type, limit, format });
       const report = await runAgent(target, { type, limit });
 
       if (format === "text") {
