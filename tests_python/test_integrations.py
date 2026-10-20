@@ -287,3 +287,22 @@ async def test_unreadable_airtable_schema_prevents_mutations(settings, payload):
         with pytest.raises(ServiceError, match="illisible"):
             await Airtable(client, settings).schema(create=True)
     assert methods == ["GET"]
+
+
+async def test_check_airtable_command_only_reads_and_needs_no_ai_key(settings, monkeypatch, capsys):
+    from argparse import Namespace
+    from osint_pipeline.__main__ import execute
+    read_settings = Settings(airtable_token=settings.airtable_token, airtable_base=settings.airtable_base)
+    monkeypatch.setattr(Settings, "from_env", lambda: read_settings)
+    original_client = httpx.AsyncClient
+    methods = []
+    def handler(request):
+        methods.append(request.method)
+        return mock_transport(request)
+    monkeypatch.setattr("osint_pipeline.__main__.httpx.AsyncClient",
+        lambda: original_client(transport=httpx.MockTransport(handler)))
+    assert await execute(Namespace(command="check-airtable")) == 0
+    assert methods == ["GET"]
+    output = capsys.readouterr().out
+    assert json.loads(output) == {"status": "accessible", "schema": "compatible", "tableCount": 5}
+    assert "Authorization" not in output

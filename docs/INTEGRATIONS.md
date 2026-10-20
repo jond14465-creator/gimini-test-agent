@@ -21,6 +21,7 @@ Prévoir Node.js 24+, Python 3.12+ et uv. Depuis la racine du dépôt :
 ```bash
 uv sync --locked --group dev
 uv run python -m osint_pipeline doctor
+uv run python -m osint_pipeline check-airtable
 ```
 
 Les versions directes sont fixées dans `pyproject.toml` et la résolution complète
@@ -175,6 +176,14 @@ absentes a bien échoué avant tout appel payant.
 Les tests sont aussi définis dans `.github/workflows/tests.yml` pour les PR et
 les mises à jour de `main`. Ils n'utilisent aucun secret de service et ne
 déclenchent ni collecte payante, ni analyse distante, ni écriture Airtable réelle.
+
+Un contrôle séparé, `.github/workflows/airtable-access.yml`, utilise le secret
+GitHub `AIRTABLE_TOKEN` pour lire le schéma de la base sélectionnée. Il ne modifie
+aucune table ni aucun enregistrement et ne demande aucune clé OpenAI ou Firecrawl.
+Ce contrôle est limité à la branche d'implémentation dans le même dépôt ; il est
+exclu des PR provenant de forks. La commande `check-airtable` exige uniquement
+le jeton Airtable et l'identifiant de base, puis affiche compatibilité et nombre
+de tables sans afficher le jeton.
 
 ## Références officielles consultées
 

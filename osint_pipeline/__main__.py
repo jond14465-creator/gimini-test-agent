@@ -25,6 +25,10 @@ async def execute(args):
         firecrawl=args.command == "run" and not args.no_firecrawl,
         airtable=args.command != "run" or args.sync_airtable)
     async with httpx.AsyncClient() as client:
+        if args.command == "check-airtable":
+            tables = await Airtable(client, settings).schema()
+            print(json.dumps({"status": "accessible", "schema": "compatible", "tableCount": len(tables)}, indent=2))
+            return 0
         if args.command == "init-airtable":
             tables = await Airtable(client, settings).schema(create=True)
             print(json.dumps({"tables": tables}, indent=2))
@@ -59,6 +63,7 @@ def main():
     parser = argparse.ArgumentParser(description="Pipeline OSINT LangGraph + Agents SDK + Firecrawl + Airtable")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="Vérifier la présence des variables sans afficher leurs valeurs")
+    commands.add_parser("check-airtable", help="Vérifier accès et schéma Airtable en lecture seule")
     commands.add_parser("init-airtable", help="Créer uniquement les tables manquantes dans la base configurée")
     sync = commands.add_parser("sync-airtable", help="Rejouer une sauvegarde locale vers Airtable sans collecte ni IA")
     sync.add_argument("report")
