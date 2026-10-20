@@ -324,3 +324,16 @@ async def test_check_openai_command_needs_no_other_service(settings, monkeypatch
     assert await execute(Namespace(command="check-openai")) == 0
     assert len(seen) == 1 and seen[0]["observations"][0]["id"] == "synthetic-test"
     assert json.loads(capsys.readouterr().out)["structuredOutput"] == "valid"
+
+
+@pytest.mark.parametrize("body,expected", [
+    ({"error": {"code": "insufficient_quota"}}, "insufficient_quota"),
+    ({"type": "rate_limit_exceeded"}, "rate_limit_exceeded"),
+    ({"message": "You exceeded your current quota. private-value"}, "insufficient_quota"),
+    ({"code": "unknown-private-value"}, None),
+])
+def test_openai_error_classification_is_safe(body, expected):
+    from types import SimpleNamespace
+    from osint_pipeline.diagnostics import openai_error_code
+    error = SimpleNamespace(body=body, code=None, status_code=429)
+    assert openai_error_code(error) == expected

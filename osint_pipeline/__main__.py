@@ -13,6 +13,7 @@ from .analysis import Analyst
 from .airtable import Airtable
 from .workflow import build_workflow, write_receipt
 from .http import ServiceError
+from .diagnostics import openai_error_code
 
 
 async def execute(args):
@@ -90,9 +91,8 @@ def main():
     try:
         return asyncio.run(execute(args))
     except APIStatusError as error:
-        code = getattr(error, "code", None)
-        safe_codes = {"invalid_api_key", "insufficient_quota", "model_not_found", "permission_denied", "unsupported_parameter"}
-        detail = f" ({code})" if code in safe_codes else ""
+        code = openai_error_code(error)
+        detail = f" ({code})" if code else ""
         print(f"OpenAI HTTP {error.status_code}{detail}", file=sys.stderr)
         return 1
     except (ValueError, RuntimeError) as error:
