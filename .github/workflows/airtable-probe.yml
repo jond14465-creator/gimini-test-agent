@@ -1,0 +1,80 @@
+name: Diagnostic écriture Airtable
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/airtable-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/osint-reliability'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Autoriser le diagnostic explicitement demandé
+        id: trigger
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          title = subprocess.check_output(['git', 'log', '-1', '--format=%s'], text=True)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('run=' + str(title.startswith('[airtable-probe]')).lower() + '\n')
+          PY
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        if: steps.trigger.outputs.run == 'true'
+        with:
+          version: '0.12.23'
+          python-version: '3.12'
+      - name: Vérifier lecture, création et upsert avec le même jeton
+        if: steps.trigger.outputs.run == 'true'
+        env:
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+          AIRTABLE_BASE_ID: appgUJkLFH6057dis
+        run: |
+          uv sync --locked --no-dev
+          uv run --locked --no-dev python - <<'PY'
+          import asyncio, json, uuid
+          import httpx
+          from osint_pipeline.config import Settings
+          from osint_pipeline.airtable import Airtable
+          from osint_pipeline.http import request_json, ServiceError
+          from osint_pipeline.diagnostics import service_diagnostic
+
+          async def main():
+              settings = Settings.from_env()
+              settings.require(ai=False, firecrawl=False, airtable=True)
+              headers = {'Authorization': 'Bearer ' + settings.airtable_token}
+              async with httpx.AsyncClient() as client:
+                  tables = await Airtable(client, settings).schema()
+                  url = 'https://api.airtable.com/v0/' + settings.airtable_base + '/' + tables['Runs']
+                  results = {}
+                  try:
+                      await request_json(client, 'GET', url + '?pageSize=1', headers=headers)
+                      results['readRecords'] = 'success'
+                  except ServiceError as error:
+                      results['readRecords'] = service_diagnostic(error, 'airtable')
+                  key = 'access-check-' + str(uuid.uuid4())
+                  fields = {'Key': key, 'Target': 'example.com', 'Status': 'access_check'}
+                  try:
+                      await request_json(client, 'POST', url, headers=headers, payload={'records': [{'fields': fields}]})
+                      results['createRecord'] = 'success'
+                  except ServiceError as error:
+                      results['createRecord'] = service_diagnostic(error, 'airtable')
+                  if results['createRecord'] == 'success':
+                      try:
+                          await request_json(client, 'PATCH', url, headers=headers, payload={
+                              'performUpsert': {'fieldsToMergeOn': ['Key']}, 'records': [{'fields': fields}]})
+                          results['upsertRecord'] = 'success'
+                      except ServiceError as error:
+                          results['upsertRecord'] = service_diagnostic(error, 'airtable')
+                  print(json.dumps(results, indent=2))
+                  return 0 if all(result == 'success' for result in results.values()) else 1
+          raise SystemExit(asyncio.run(main()))
+          PY

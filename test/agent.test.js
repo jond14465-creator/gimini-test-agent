@@ -218,6 +218,52 @@ function makeRequest(server, path) {
   });
 }
 
+test("options invalides rejetées avant toute collecte", async () => {
+  let calls = 0;
+  const fetchImpl = async () => { calls++; throw new Error("unexpected fetch"); };
+  for (const options of [{ type: "invalid" }, { limit: -1 }, { timeoutMs: 0 }]) {
+    await assert.rejects(() => runOsintAgent("example.com", { ...options, fetchImpl }));
+  }
+  assert.equal(calls, 0);
+});
+
+test("la collecte expire même si le fournisseur ignore l'annulation", async () => {
+  const signals = [];
+  const report = await runOsintAgent("example", {
+    timeoutMs: 10,
+    fetchImpl: async (_, options) => {
+      signals.push(options.signal);
+      return new Promise(() => {});
+    },
+  });
+  assert.ok(signals.length > 0);
+  assert.ok(signals.every(signal => signal.aborted));
+  assert.ok(report.sources.every(source => /Délai de collecte/.test(source.error)));
+});
+
+test("le délai couvre aussi la lecture du JSON", async () => {
+  const report = await runOsintAgent("example", {
+    timeoutMs: 10,
+    fetchImpl: async () => ({ ok: true, json: () => new Promise(() => {}) }),
+  });
+  assert.ok(report.sources.every(source => /Délai de collecte/.test(source.error)));
+});
+
+test("l'API rejette type et format invalides sans appeler l'agent", async () => {
+  let calls = 0;
+  const server = createServer({ runAgent: async () => { calls++; } });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    for (const query of ["type=invalid", "format=html", "limit=-1"]) {
+      const response = await makeRequest(server, `/osint?target=example.com&${query}`);
+      assert.equal(response.statusCode, 400);
+    }
+    assert.equal(calls, 0);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
 test("createServer expose /health et /osint", async () => {
   const server = createServer({
     runAgent: async (target, options) => ({

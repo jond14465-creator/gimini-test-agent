@@ -1,0 +1,18 @@
+[project]
+name = "osint-pipeline"
+version = "0.1.0"
+description = "Orchestration OSINT LangGraph, OpenAI Agents SDK, Firecrawl et Airtable"
+requires-python = ">=3.12"
+dependencies = [
+  "langgraph==1.2.16",
+  "openai-agents==0.24.0",
+  "httpx==0.28.1",
+  "python-dotenv==1.2.4",
+]
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests_python"]
+asyncio_mode = "auto"

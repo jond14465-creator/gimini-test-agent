@@ -4,6 +4,7 @@
 const { runOsintAgent } = require("./agent");
 const { formatTextReport } = require("./report");
 const { startServer } = require("./server");
+const { saveReport } = require("./storage");
 
 function parseArgs(argv) {
   const values = [...argv];
@@ -15,6 +16,14 @@ function parseArgs(argv) {
 
     if (option === "--json") {
       options.json = true;
+      continue;
+    }
+
+    if (option === "--output") {
+      options.outputDir = values.shift();
+      if (!options.outputDir || options.outputDir.startsWith("--")) {
+        throw new Error("Le répertoire de sortie est obligatoire après --output.");
+      }
       continue;
     }
 
@@ -87,6 +96,10 @@ async function main() {
     }
 
     const report = await runOsintAgent(target, options);
+    if (options.outputDir) {
+      const destination = await saveReport(report, options.outputDir);
+      process.stderr.write(`Rapport enregistré dans ${destination}\n`);
+    }
     const output = options.json
       ? JSON.stringify(report, null, 2)
       : formatTextReport(report);

@@ -1,0 +1,34 @@
+name: Accès Airtable
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/airtable-access.yml'
+      - 'osint_pipeline/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check-airtable:
+    # Run only on this trusted implementation branch inside the same repository.
+    # Fork pull requests never receive the service credential.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/osint-reliability'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.12.23'
+          python-version: '3.12'
+          enable-cache: true
+      - name: Installer les dépendances verrouillées
+        run: uv sync --locked --no-dev
+      - name: Vérifier le secret et le schéma en lecture seule
+        env:
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+          AIRTABLE_BASE_ID: appgUJkLFH6057dis
+        run: uv run --locked --no-dev python -m osint_pipeline check-airtable

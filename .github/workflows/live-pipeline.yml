@@ -1,0 +1,72 @@
+name: Parcours OSINT réel
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/live-pipeline.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: osint-live-test
+  cancel-in-progress: false
+
+jobs:
+  live-pipeline:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/osint-reliability'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Autoriser seulement une exécution explicitement marquée
+        id: trigger
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          title = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True)
+          enabled = title.startswith("[osint-live]")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"run={str(enabled).lower()}\n")
+          print("Test réel autorisé" if enabled else "Pas de nouvel appel facturé pour ce commit")
+          PY
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.trigger.outputs.run == 'true'
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        if: steps.trigger.outputs.run == 'true'
+        with:
+          version: '0.12.23'
+          python-version: '3.12'
+          enable-cache: true
+      - name: Installer les dépendances verrouillées
+        if: steps.trigger.outputs.run == 'true'
+        run: uv sync --locked --no-dev
+      - name: Vérifier OpenAI avec une analyse synthétique courte
+        if: steps.trigger.outputs.run == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-5-mini
+        run: uv run --locked --no-dev python -m osint_pipeline check-openai
+      - name: Collecter, analyser et sauvegarder le rapport exemple
+        if: steps.trigger.outputs.run == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-5-mini
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+          AIRTABLE_BASE_ID: appgUJkLFH6057dis
+        run: uv run --locked --no-dev python -m osint_pipeline run example.com --type domain --max-pages 1 --sync-airtable
+      - name: Conserver les rapports pour consultation
+        if: always() && steps.trigger.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: osint-example-report
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 7

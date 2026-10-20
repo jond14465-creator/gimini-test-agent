@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "http://localhost:26831/jond14465-creator/gimini-test-agent"
+    "url": "https://github.com/jond14465-creator/gimini-test-agent.git"
   },
   "keywords": [
     "osint",
