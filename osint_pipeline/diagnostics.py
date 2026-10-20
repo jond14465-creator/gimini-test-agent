@@ -28,6 +28,10 @@ def service_diagnostic(error, service):
         result["httpStatus"] = status
     if service == "openai":
         code = openai_error_code(error)
+        if code is None:
+            from agents.exceptions import ModelBehaviorError
+            if isinstance(error, ModelBehaviorError):
+                code = "output_budget_exhausted" if "max_output_tokens" in str(error) else "invalid_model_output"
     else:
         code = getattr(error, "code", None)
         if code not in {"INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND", "AUTHENTICATION_REQUIRED",

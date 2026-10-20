@@ -350,3 +350,10 @@ async def test_service_diagnostic_preserves_status_without_remote_secrets():
     diagnostic = service_diagnostic(captured.value, "airtable")
     assert diagnostic == {"service": "airtable", "httpStatus": 403, "code": "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND"}
     assert "provider-secret" not in json.dumps(diagnostic) + str(captured.value)
+
+
+def test_incomplete_model_response_has_safe_actionable_diagnostic():
+    from agents.exceptions import ModelBehaviorError
+    from osint_pipeline.diagnostics import service_diagnostic
+    error = ModelBehaviorError("response.incomplete: max_output_tokens; private-model-output")
+    assert service_diagnostic(error, "openai") == {"service": "openai", "code": "output_budget_exhausted"}

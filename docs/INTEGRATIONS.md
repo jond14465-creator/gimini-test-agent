@@ -137,6 +137,11 @@ fournit pas ici de contrainte d'unicité transactionnelle sur les clés externes
 - Pages Firecrawl tronquées à 12 000 caractères ; modèle limité aux vingt
   premières observations et 2500 caractères par extrait, 2500 tokens de sortie,
   un tour SDK, délai global de 60 secondes pour l'analyse.
+- Pour `gpt-5-mini` et `gpt-5`, effort de raisonnement `minimal` afin de réserver
+  le budget à la sortie structurée ; le prompt demande au maximum trois
+  affirmations et des citations courtes. Les erreurs de budget et les codes
+  HTTP des intégrations sont conservés sous forme de diagnostics sans messages
+  distants bruts.
 - Le SDK utilise `store=False` et les traces SDK sont désactivées. Le contenu
   est néanmoins envoyé à OpenAI pour analyse et à Airtable si la sync est activée.
 - Deux reprises au maximum pour les limites explicites des services HTTP ;
