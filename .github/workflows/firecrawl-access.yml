@@ -1,0 +1,47 @@
+name: Accès Firecrawl
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/firecrawl-access.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-firecrawl:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/osint-reliability'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.12.23'
+          python-version: '3.12'
+          enable-cache: true
+      - name: Installer les dépendances verrouillées
+        run: uv sync --locked --no-dev
+      - name: Tester une recherche publique bornée
+        env:
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+        run: |
+          uv run --locked --no-dev python - <<'PY'
+          import asyncio
+          import json
+          from dataclasses import replace
+          import httpx
+          from osint_pipeline.config import Settings
+          from osint_pipeline.firecrawl import Firecrawl
+
+          async def main():
+              settings = replace(Settings.from_env(), max_pages=1)
+              settings.require(ai=False, firecrawl=True, airtable=False)
+              async with httpx.AsyncClient() as client:
+                  results = await Firecrawl(client, settings).search("site:example.com")
+              print(json.dumps({"status": "accessible", "search": "success", "results": len(results)}))
+
+          asyncio.run(main())
+          PY
