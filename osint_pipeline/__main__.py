@@ -66,7 +66,7 @@ async def execute(args):
         state = await workflow.ainvoke({"target": args.target, "type": args.type})
         print(json.dumps({"run": state["report"]["run"], "directory": state["directory"],
             "observations": len(state["report"]["observations"]), "airtable": state["sync_result"],
-            "issues": state["issues"]}, ensure_ascii=False, indent=2))
+            "issues": state["issues"], "diagnostics": state["diagnostics"]}, ensure_ascii=False, indent=2))
         return 1 if state["issues"] else 0
 
 

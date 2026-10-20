@@ -12,9 +12,11 @@ from .analysis import verify
 from .models import Analysis
 from .bridge import node
 from .http import ServiceError
+from .diagnostics import service_diagnostic
 
 
 class State(TypedDict, total=False):
+    diagnostics: list
     target: str
     type: str
     pages: list
@@ -78,6 +80,7 @@ def build_workflow(*, firecrawl, analyst, airtable, output_dir, bridge=node):
 
     async def analyze(state):
         issues = list(state.get("issues", []))
+        diagnostics = list(state.get("diagnostics", []))
         if analyst is None:
             analysis = Analysis(summary="Analyse IA désactivée.", claims=[], limitations=["Aucun modèle IA exécuté."])
         else:
@@ -85,15 +88,17 @@ def build_workflow(*, firecrawl, analyst, airtable, output_dir, bridge=node):
                 analysis = await analyst.analyze(state["report"])
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as error:
                 # Provider exceptions may contain request metadata; never persist their bodies.
                 issues.append("Échec de l'analyse OpenAI ; observations conservées localement.")
+                diagnostics.append(service_diagnostic(error, "openai"))
                 analysis = Analysis(summary="Analyse IA indisponible.", claims=[], limitations=["Échec de l'appel au modèle."])
-        return {"raw_analysis": analysis, "issues": issues, "stages": stage(state, "analyze")}
+        return {"raw_analysis": analysis, "issues": issues, "diagnostics": diagnostics, "stages": stage(state, "analyze")}
 
     async def verification(state):
         report = dict(state["report"])
         report["analysis"] = verify(state["raw_analysis"], report)
+        report["diagnostics"] = state["diagnostics"]
         if state["issues"]:
             report["integrations"]["openai"] = "failed"
             report["run"]["status"] = "partial"
@@ -119,17 +124,19 @@ def build_workflow(*, firecrawl, analyst, airtable, output_dir, bridge=node):
 
     async def memory(state):
         issues = list(state["issues"])
+        diagnostics = list(state.get("diagnostics", []))
         result = {"status": "disabled"}
         if airtable is not None:
             try:
                 result = {"status": "synced", "records": await airtable.sync(state["report"])}
-            except ServiceError:
+            except ServiceError as error:
                 issues.append("Synchronisation Airtable incomplète ; relancer sync-airtable sur le rapport sauvegardé.")
                 result = {"status": "failed"}
+                diagnostics.append(service_diagnostic(error, "airtable"))
         stages = stage(state, "memory")
-        receipt = {"airtable": result, "issues": issues, "stages": stages}
+        receipt = {"airtable": result, "issues": issues, "diagnostics": diagnostics, "stages": stages}
         write_receipt(state["directory"], receipt)
-        return {"sync_result": result, "issues": issues, "stages": stages}
+        return {"sync_result": result, "issues": issues, "diagnostics": diagnostics, "stages": stages}
 
     graph = StateGraph(State)
     for name, handler in [("research", research), ("collect", collect), ("analyze", analyze),

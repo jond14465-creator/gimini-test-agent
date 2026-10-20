@@ -337,3 +337,16 @@ def test_openai_error_classification_is_safe(body, expected):
     from osint_pipeline.diagnostics import openai_error_code
     error = SimpleNamespace(body=body, code=None, status_code=429)
     assert openai_error_code(error) == expected
+
+
+async def test_service_diagnostic_preserves_status_without_remote_secrets():
+    from osint_pipeline.diagnostics import service_diagnostic
+    def handler(request):
+        return httpx.Response(403, json={"error": {"type": "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND",
+            "message": "provider-secret-must-not-leak"}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ServiceError) as captured:
+            await request_json(client, "PATCH", "https://api.airtable.com/v0/test", headers={})
+    diagnostic = service_diagnostic(captured.value, "airtable")
+    assert diagnostic == {"service": "airtable", "httpStatus": 403, "code": "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND"}
+    assert "provider-secret" not in json.dumps(diagnostic) + str(captured.value)
