@@ -306,3 +306,21 @@ async def test_check_airtable_command_only_reads_and_needs_no_ai_key(settings, m
     output = capsys.readouterr().out
     assert json.loads(output) == {"status": "accessible", "schema": "compatible", "tableCount": 5}
     assert "Authorization" not in output
+
+
+async def test_check_openai_command_needs_no_other_service(settings, monkeypatch, capsys):
+    from argparse import Namespace
+    from osint_pipeline.__main__ import execute
+    ai_settings = Settings(openai_key=settings.openai_key)
+    monkeypatch.setattr(Settings, "from_env", lambda: ai_settings)
+    seen = []
+    class SyntheticAnalyst:
+        def __init__(self, settings):
+            assert settings.openai_key
+        async def analyze(self, report):
+            seen.append(report)
+            return Analysis(summary="Test", claims=[], limitations=["Synthetic"])
+    monkeypatch.setattr("osint_pipeline.__main__.Analyst", SyntheticAnalyst)
+    assert await execute(Namespace(command="check-openai")) == 0
+    assert len(seen) == 1 and seen[0]["observations"][0]["id"] == "synthetic-test"
+    assert json.loads(capsys.readouterr().out)["structuredOutput"] == "valid"

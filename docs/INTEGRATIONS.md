@@ -22,6 +22,7 @@ Prévoir Node.js 24+, Python 3.12+ et uv. Depuis la racine du dépôt :
 uv sync --locked --group dev
 uv run python -m osint_pipeline doctor
 uv run python -m osint_pipeline check-airtable
+uv run python -m osint_pipeline check-openai
 ```
 
 Les versions directes sont fixées dans `pyproject.toml` et la résolution complète
@@ -184,6 +185,14 @@ Ce contrôle est limité à la branche d'implémentation dans le même dépôt ;
 exclu des PR provenant de forks. La commande `check-airtable` exige uniquement
 le jeton Airtable et l'identifiant de base, puis affiche compatibilité et nombre
 de tables sans afficher le jeton.
+
+Le workflow `live-pipeline.yml` vérifie OpenAI sur une donnée synthétique, puis
+exécute le parcours complet sur `example.com` (une page Firecrawl au maximum),
+avec synchronisation réelle vers la base sélectionnée. Les secrets restent dans
+GitHub Actions. Les rapports sont conservés sept jours comme artefacts du dépôt.
+Pour éviter de facturer ce test à chaque modification de la PR, les appels réels
+ne sont lancés que si le titre du dernier commit commence par `[osint-live]`.
+Un échec du contrôle OpenAI arrête le job avant le test complet et ses écritures.
 
 ## Références officielles consultées
 

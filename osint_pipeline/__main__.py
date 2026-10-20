@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 
 import httpx
+from openai import APIStatusError
 
 from .config import Settings, ROOT
 from .firecrawl import Firecrawl
@@ -21,10 +22,19 @@ async def execute(args):
             "FIRECRAWL_API_KEY": bool(settings.firecrawl_key),
             "AIRTABLE_TOKEN": bool(settings.airtable_token), "AIRTABLE_BASE_ID": bool(settings.airtable_base)}, indent=2))
         return 0
-    settings.require(ai=args.command == "run" and not args.no_ai,
+    settings.require(ai=args.command == "check-openai" or (args.command == "run" and not args.no_ai),
         firecrawl=args.command == "run" and not args.no_firecrawl,
-        airtable=args.command != "run" or args.sync_airtable)
+        airtable=args.command in ("check-airtable", "init-airtable", "sync-airtable") or
+            (args.command == "run" and args.sync_airtable))
     async with httpx.AsyncClient() as client:
+        if args.command == "check-openai":
+            # Synthetic evidence for an access/protocol check; never saved as real OSINT data.
+            analysis = await Analyst(settings).analyze({"target": "Test technique synthétique",
+                "observations": [{"id": "synthetic-test", "url": "https://example.com/",
+                    "title": "Extrait synthétique", "snippet": "Ceci est une donnée synthétique pour tester l'analyse structurée."}]})
+            print(json.dumps({"status": "accessible", "structuredOutput": "valid",
+                "claimCount": len(analysis.claims)}, indent=2))
+            return 0
         if args.command == "check-airtable":
             tables = await Airtable(client, settings).schema()
             print(json.dumps({"status": "accessible", "schema": "compatible", "tableCount": len(tables)}, indent=2))
@@ -64,6 +74,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="Vérifier la présence des variables sans afficher leurs valeurs")
     commands.add_parser("check-airtable", help="Vérifier accès et schéma Airtable en lecture seule")
+    commands.add_parser("check-openai", help="Tester une analyse structurée courte sur une donnée synthétique")
     commands.add_parser("init-airtable", help="Créer uniquement les tables manquantes dans la base configurée")
     sync = commands.add_parser("sync-airtable", help="Rejouer une sauvegarde locale vers Airtable sans collecte ni IA")
     sync.add_argument("report")
@@ -78,6 +89,12 @@ def main():
     args = parser.parse_args()
     try:
         return asyncio.run(execute(args))
+    except APIStatusError as error:
+        code = getattr(error, "code", None)
+        safe_codes = {"invalid_api_key", "insufficient_quota", "model_not_found", "permission_denied", "unsupported_parameter"}
+        detail = f" ({code})" if code in safe_codes else ""
+        print(f"OpenAI HTTP {error.status_code}{detail}", file=sys.stderr)
+        return 1
     except (ValueError, RuntimeError) as error:
         print(str(error), file=sys.stderr)
         return 1
